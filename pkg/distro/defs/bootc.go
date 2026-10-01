@@ -27,6 +27,8 @@ type BootcDistro struct {
 	unifiedKernel   bool
 	containerType   bootc.ContainerType
 	bootloader      *string
+	// set from the build container, which runs "bootc install"
+	installVarMounts bool
 
 	id            distro.ID
 	defaultFs     string
@@ -130,18 +132,19 @@ func NewBootcWithLoader(loader *Loader, name string, cinfo *bootc.Info) (*BootcD
 	d := &BootcDistro{
 		// the ID is technically not allowed by the ID parser, as it doesn't
 		// contain a version, but we will relax this requirement later
-		id:              *id,
-		imgref:          cinfo.Imgref,
-		imageID:         cinfo.ImageID,
-		buildImgref:     cinfo.Imgref, // default to using the same image for build for now
-		sourceInfo:      osInfo,
-		buildSourceInfo: osInfo,
-		defaultFs:       cinfo.DefaultRootFs,
-		releasever:      osInfo.OSRelease.VersionID,
-		rootfsMinSize:   cinfo.Size * containerSizeToDiskSizeMultiplier,
-		bootloader:      cinfo.Bootloader,
-		unifiedKernel:   cinfo.UnifiedKernel,
-		containerType:   cinfo.ContainerType,
+		id:               *id,
+		imgref:           cinfo.Imgref,
+		imageID:          cinfo.ImageID,
+		buildImgref:      cinfo.Imgref, // default to using the same image for build for now
+		sourceInfo:       osInfo,
+		buildSourceInfo:  osInfo,
+		defaultFs:        cinfo.DefaultRootFs,
+		releasever:       osInfo.OSRelease.VersionID,
+		rootfsMinSize:    cinfo.Size * containerSizeToDiskSizeMultiplier,
+		bootloader:       cinfo.Bootloader,
+		unifiedKernel:    cinfo.UnifiedKernel,
+		installVarMounts: cinfo.InstallVarMounts,
+		containerType:    cinfo.ContainerType,
 	}
 
 	// load image types from bootc-generic-1
@@ -300,6 +303,7 @@ func (d *BootcDistro) SetBuildContainer(cinfo *bootc.Info) error {
 
 	d.buildImgref = cinfo.Imgref
 	d.buildImageID = cinfo.ImageID
+	d.installVarMounts = cinfo.InstallVarMounts
 	d.buildSourceInfo = cinfo.OSInfo
 
 	return nil
