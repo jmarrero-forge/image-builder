@@ -43,6 +43,8 @@ type RawBootcImage struct {
 	UnifiedKernel bool
 	Aboot         bool
 	Bootloader    *string
+	// The installer's bootc initializes filesystems mounted at /var
+	InstallVarMounts bool
 
 	// customizations go here because there is no intermediate
 	// tree, with `bootc install to-filesystem` we can only work
@@ -204,7 +206,7 @@ func (p *RawBootcImage) serialize() (osbuild.Pipeline, error) {
 	if err != nil {
 		return osbuild.Pipeline{}, err
 	}
-	st, err := osbuild.NewBootcInstallToFilesystemStage(opts, inputs, devices, mounts, installPlatform)
+	st, err := osbuild.NewBootcInstallToFilesystemStage(opts, inputs, devices, mounts, installPlatform, p.InstallVarMounts)
 	if err != nil {
 		return osbuild.Pipeline{}, err
 	}

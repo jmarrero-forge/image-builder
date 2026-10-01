@@ -49,6 +49,10 @@ type Info struct {
 	// The boot artifact type reported by the container.
 	ContainerType ContainerType
 
+	// Does the container's bootc initialize filesystems mounted at /var
+	// (and below) during "bootc install to-filesystem"?
+	InstallVarMounts bool
+
 	// What bootloader should be passed?
 	Bootloader *string
 }

@@ -277,6 +277,40 @@ func TestHasAboot(t *testing.T) {
 	}
 }
 
+func TestInstallVarMounts(t *testing.T) {
+	for _, tc := range []struct {
+		Name     string
+		In       string
+		ExitCode int
+		Out      bool
+		ErrMsg   string
+	}{
+		{Name: "supported", In: "bootc 1.17.0\nFeatures:\n - initialize-var-mounts", Out: true},
+		{Name: "among others", In: "bootc 1.17.0\nFeatures:\n - something-else\n - initialize-var-mounts\n", Out: true},
+		{Name: "other features", In: "bootc 1.17.0\nFeatures:\n - something-else", Out: false},
+		{Name: "no features", In: "bootc 1.16.10", Out: false},
+		{Name: "not a feature line", In: "bootc 1.17.0 initialize-var-mounts", Out: false},
+		{Name: "crlf", In: "bootc 1.17.0\r\nFeatures:\r\n - initialize-var-mounts\r", Out: true},
+		{Name: "other section", In: "bootc 1.17.0\nFeatures:\n - something-else\nOther:\n - initialize-var-mounts", Out: false},
+		{Name: "error", In: "", ExitCode: 1, ErrMsg: "failed to run bootc --version"},
+	} {
+		t.Run(tc.Name, func(t *testing.T) {
+			makeFakePodman(t, fmt.Sprintf(`#!/bin/sh
+				printf '%s\n'
+				exit %d
+				`, tc.In, tc.ExitCode))
+			cnt := bootc.Container{}
+			varMounts, err := cnt.InstallVarMounts()
+			if tc.ErrMsg != "" {
+				assert.ErrorContains(t, err, tc.ErrMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tc.Out, varMounts)
+		})
+	}
+}
+
 func TestBootloaderHappy(t *testing.T) {
 	for _, tc := range []struct {
 		In  string
