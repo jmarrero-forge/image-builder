@@ -26,6 +26,8 @@ type BootcDiskImage struct {
 	Aboot         bool
 	// The installer's bootc initializes filesystems mounted at /var
 	InstallVarMounts bool
+	// The installer's bootc can skip seeding /var (--defer-var)
+	InstallDeferVar bool
 
 	Partitions []PartitionConfig
 
@@ -119,6 +121,7 @@ func (img *BootcDiskImage) InstantiateManifestFromContainers(m *manifest.Manifes
 	rawImage.UnifiedKernel = img.UnifiedKernel
 	rawImage.Aboot = img.Aboot
 	rawImage.InstallVarMounts = img.InstallVarMounts
+	rawImage.InstallDeferVar = img.InstallDeferVar
 	rawImage.PartitionTable = img.PartitionTable
 	rawImage.OSCustomizations = img.OSCustomizations
 	rawImage.DiskCustomizations = img.DiskCustomizations

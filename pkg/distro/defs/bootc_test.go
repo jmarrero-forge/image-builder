@@ -468,6 +468,7 @@ func TestSetBuildContainer(t *testing.T) {
 		DefaultRootFs:    "xfs",
 		Size:             100 * datasizes.MiB,
 		InstallVarMounts: true,
+		InstallDeferVar:  true,
 		OSInfo: &osinfo.Info{
 			OSRelease: osinfo.OSRelease{
 				ID:        "whatever",
@@ -483,6 +484,7 @@ func TestSetBuildContainer(t *testing.T) {
 		expectedError   string
 		// the build container runs bootc install, not the base container
 		expectedInstallVarMounts bool
+		expectedInstallDeferVar  bool
 	}
 
 	testCases := map[string]testCase{
@@ -508,6 +510,18 @@ func TestSetBuildContainer(t *testing.T) {
 			},
 			expectedImgref:           "example.com/containers/distro-bootc:build43",
 			expectedInstallVarMounts: true,
+		},
+
+		"var-mounts-defer-var": {
+			buildInfo: &bootc.Info{
+				Imgref:           "example.com/containers/distro-bootc:build44",
+				Arch:             "arm64",
+				InstallVarMounts: true,
+				InstallDeferVar:  true,
+			},
+			expectedImgref:           "example.com/containers/distro-bootc:build44",
+			expectedInstallVarMounts: true,
+			expectedInstallDeferVar:  true,
 		},
 
 		"noimgref": {
@@ -558,6 +572,7 @@ func TestSetBuildContainer(t *testing.T) {
 			require.Equal(tc.expectedImgref, bd.buildImgref)
 			require.Equal(tc.expectedImageID, bd.buildImageID)
 			require.Equal(tc.expectedInstallVarMounts, bd.installVarMounts)
+			require.Equal(tc.expectedInstallDeferVar, bd.installDeferVar)
 		})
 	}
 }

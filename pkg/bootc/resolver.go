@@ -242,11 +242,11 @@ func (c *Container) ResolveInfo(variant string) (*Info, error) {
 	bootcInfo.UnifiedKernel = unifiedKernel
 	bootcInfo.ContainerType = containerType
 
-	installVarMounts, err := c.InstallVarMounts()
+	features, err := c.Features()
 	if err != nil {
 		return nil, err
 	}
-	bootcInfo.InstallVarMounts = installVarMounts
+	bootcInfo.setInstallFeatures(features)
 
 	size, err := getContainerSize(c.ref, c.storeOpts)
 	if err != nil {
@@ -264,16 +264,17 @@ func (c *Container) ResolveBuildInfo() (*Info, error) {
 	// The build container runs "bootc install", so its bootc determines
 	// which filesystems can be mounted for the installation. Failing to
 	// find out only means they are not mounted, as with older versions.
-	installVarMounts, err := c.InstallVarMounts()
+	features, err := c.Features()
 	if err != nil {
 		olog.Printf("WARNING: not mounting /var filesystems for bootc install: %v", err)
 	}
-	return &Info{
-		Imgref:           c.ref,
-		ImageID:          c.id,
-		Arch:             c.Arch(),
-		InstallVarMounts: installVarMounts,
-	}, nil
+	info := &Info{
+		Imgref:  c.ref,
+		ImageID: c.id,
+		Arch:    c.Arch(),
+	}
+	info.setInstallFeatures(features)
+	return info, nil
 }
 
 func (c *Container) RootFS() fs.FS {
@@ -448,6 +449,13 @@ func (c *Container) bootArtifacts() (bool, ContainerType, error) {
 // content, and versions before 1.12 reject them.
 const InstallFeatureVarMounts = "initialize-var-mounts"
 
+// InstallFeatureDeferVar is listed among the features of "bootc --version"
+// when "bootc install to-filesystem" accepts --defer-var, which skips seeding
+// the stateroot /var from the image. With --initialize-var-mounts, each file of
+// the image's /var is then stored once, on the filesystem that holds it at
+// boot, rather than also on the root filesystem below the mountpoints.
+const InstallFeatureDeferVar = "defer-var"
+
 // parseBootcFeatures returns the features listed by "bootc --version": the
 // version is followed by a "Features:" line and one "- <name>" line per
 // feature. Older versions print only the version.
@@ -468,9 +476,9 @@ func parseBootcFeatures(output string) []string {
 	return features
 }
 
-// InstallVarMounts finds out if the bootc inside the container can initialize
-// filesystems mounted at /var (and below) during "bootc install to-filesystem".
-func (c *Container) InstallVarMounts() (bool, error) {
+// Features returns the features listed by "bootc --version" in the container,
+// none for versions that print only the version.
+func (c *Container) Features() ([]string, error) {
 	args := []string{"exec"}
 	args = append(args, c.storeOpts...)
 	args = append(args, c.id, "bootc", "--version")
@@ -479,11 +487,11 @@ func (c *Container) InstallVarMounts() (bool, error) {
 	output, err := exec.Command("podman", args...).Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return false, fmt.Errorf("failed to run bootc --version: %w, stderr:\n%s", err, exitErr.Stderr)
+			return nil, fmt.Errorf("failed to run bootc --version: %w, stderr:\n%s", err, exitErr.Stderr)
 		}
-		return false, fmt.Errorf("failed to run bootc --version: %w", err)
+		return nil, fmt.Errorf("failed to run bootc --version: %w", err)
 	}
-	return slices.Contains(parseBootcFeatures(string(output)), InstallFeatureVarMounts), nil
+	return parseBootcFeatures(string(output)), nil
 }
 
 func findImageIdFor(cntId, ref string, extraOpts []string) (string, error) {

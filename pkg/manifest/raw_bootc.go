@@ -45,6 +45,8 @@ type RawBootcImage struct {
 	Bootloader    *string
 	// The installer's bootc initializes filesystems mounted at /var
 	InstallVarMounts bool
+	// The installer's bootc can skip seeding /var (--defer-var)
+	InstallDeferVar bool
 
 	// customizations go here because there is no intermediate
 	// tree, with `bootc install to-filesystem` we can only work
@@ -206,7 +208,13 @@ func (p *RawBootcImage) serialize() (osbuild.Pipeline, error) {
 	if err != nil {
 		return osbuild.Pipeline{}, err
 	}
-	st, err := osbuild.NewBootcInstallToFilesystemStage(opts, inputs, devices, mounts, installPlatform, p.InstallVarMounts)
+	st, err := osbuild.NewBootcInstallToFilesystemStage(opts, inputs, devices, mounts, installPlatform, osbuild.BootcInstallVarMounts{
+		Initialize: p.InstallVarMounts,
+		// UKI and aboot images get no post-install stages (below), so
+		// nothing puts the /var filesystems into the deployment's fstab
+		// and they aren't mounted at boot: /var must stay seeded there.
+		Defer: p.InstallDeferVar && !p.UnifiedKernel && !p.Aboot,
+	})
 	if err != nil {
 		return osbuild.Pipeline{}, err
 	}
