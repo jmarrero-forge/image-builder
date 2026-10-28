@@ -2,7 +2,11 @@
 // generating manifests for bootc-derived images.
 package bootc
 
-import "github.com/osbuild/image-builder/pkg/bib/osinfo"
+import (
+	"slices"
+
+	"github.com/osbuild/image-builder/pkg/bib/osinfo"
+)
 
 // ContainerType is the boot artifact type reported by bootc container inspect.
 type ContainerType string
@@ -49,6 +53,21 @@ type Info struct {
 	// The boot artifact type reported by the container.
 	ContainerType ContainerType
 
+	// Does the container's bootc initialize filesystems mounted at /var
+	// (and below) during "bootc install to-filesystem"?
+	InstallVarMounts bool
+
+	// Can the container's bootc skip seeding /var during "bootc install
+	// to-filesystem" (--defer-var)?
+	InstallDeferVar bool
+
 	// What bootloader should be passed?
 	Bootloader *string
+}
+
+// setInstallFeatures records which of the features listed by the container's
+// "bootc --version" are used for "bootc install to-filesystem".
+func (i *Info) setInstallFeatures(features []string) {
+	i.InstallVarMounts = slices.Contains(features, InstallFeatureVarMounts)
+	i.InstallDeferVar = slices.Contains(features, InstallFeatureDeferVar)
 }

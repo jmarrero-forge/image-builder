@@ -275,6 +275,8 @@ func (t *bootcImageType) manifestForDisk(bp *blueprint.Blueprint, options distro
 	img.Bootloader = bd.bootloader
 	img.UnifiedKernel = bd.unifiedKernel
 	img.Aboot = bd.containerType.IsAboot()
+	img.InstallVarMounts = bd.installVarMounts
+	img.InstallDeferVar = bd.installDeferVar
 
 	img.OSCustomizations.Subscription = options.Subscription
 	img.OSCustomizations.Users = users.UsersFromBP(customizations.GetUsers())

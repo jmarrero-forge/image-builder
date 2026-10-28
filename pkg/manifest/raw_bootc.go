@@ -39,6 +39,10 @@ type RawBootcImage struct {
 	UnifiedKernel bool
 	Aboot         bool
 	Bootloader    *string
+	// The installer's bootc initializes filesystems mounted at /var
+	InstallVarMounts bool
+	// The installer's bootc can skip seeding /var (--defer-var)
+	InstallDeferVar bool
 
 	// customizations go here because there is no intermediate
 	// tree, with `bootc install to-filesystem` we can only work
@@ -197,7 +201,10 @@ func (p *RawBootcImage) serialize() (osbuild.Pipeline, error) {
 	if err != nil {
 		return osbuild.Pipeline{}, err
 	}
-	st, err := osbuild.NewBootcInstallToFilesystemStage(opts, inputs, devices, mounts, installPlatform)
+	st, err := osbuild.NewBootcInstallToFilesystemStage(opts, inputs, devices, mounts, installPlatform, osbuild.BootcInstallVarMounts{
+		Initialize: p.InstallVarMounts,
+		Defer:      p.InstallDeferVar,
+	})
 	if err != nil {
 		return osbuild.Pipeline{}, err
 	}
@@ -215,8 +222,7 @@ func (p *RawBootcImage) serialize() (osbuild.Pipeline, error) {
 			return osbuild.Pipeline{}, fmt.Errorf("gen devices stage failed %w", err)
 		}
 
-		mounts = append(mounts, *osbuild.NewOSTreeDeploymentMountDefault("ostree.deployment", osbuild.OSTreeMountSourceMount))
-		mounts = append(mounts, *osbuild.NewBindMount("bind-ostree-deployment-to-tree", "mount://", "tree://"))
+		mounts = deploymentMounts(mounts)
 
 		postStages := []*osbuild.Stage{}
 
@@ -396,7 +402,15 @@ func (p *RawBootcImage) serialize() (osbuild.Pipeline, error) {
 		// then per the selinux policy
 		if p.OSCustomizations.SELinux != "" {
 			if len(postStages) > 0 {
-				for _, changedFile := range []string{"/etc", "/var"} {
+				// setfiles does not descend into other mounts, so relabel
+				// filesystems mounted below /var separately.
+				changedFiles := []string{"/etc", "/var"}
+				for _, m := range mounts {
+					if osbuild.IsVarMountpoint(m.Target) {
+						changedFiles = append(changedFiles, m.Target)
+					}
+				}
+				for _, changedFile := range changedFiles {
 					opts := &osbuild.SELinuxStageOptions{
 						Target:       "tree://" + changedFile,
 						FileContexts: fmt.Sprintf("etc/selinux/%s/contexts/files/file_contexts", p.OSCustomizations.SELinux),
@@ -412,6 +426,25 @@ func (p *RawBootcImage) serialize() (osbuild.Pipeline, error) {
 	}
 
 	return pipeline, nil
+}
+
+// deploymentMounts returns the mounts presenting the ostree deployment as the
+// tree. The deployment's /var is a bind mount of the stateroot's var, which
+// hides filesystems mounted on the physical root's /var. Mount those on top of
+// the deployment instead, so that customizations written to /var (e.g. home
+// directories) end up on the filesystems that are mounted at boot.
+func deploymentMounts(diskMounts []osbuild.Mount) []osbuild.Mount {
+	var mounts, varMounts []osbuild.Mount
+	for _, m := range diskMounts {
+		if osbuild.IsVarMountpoint(m.Target) {
+			varMounts = append(varMounts, m)
+		} else {
+			mounts = append(mounts, m)
+		}
+	}
+	mounts = append(mounts, *osbuild.NewOSTreeDeploymentMountDefault("ostree.deployment", osbuild.OSTreeMountSourceMount))
+	mounts = append(mounts, varMounts...)
+	return append(mounts, *osbuild.NewBindMount("bind-ostree-deployment-to-tree", "mount://", "tree://"))
 }
 
 // genMountpointSELinuxStages creates stages that label the root and /boot
