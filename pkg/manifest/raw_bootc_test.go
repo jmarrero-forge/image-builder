@@ -126,11 +126,20 @@ func TestRawBootcImageNonAbootNoneStillNeedsESP(t *testing.T) {
 func TestRawBootcImageSerializeVarMounts(t *testing.T) {
 	bootMounts := []string{"/", "/boot", "/boot/efi"}
 	varMounts := []string{"/var/opt", "/var/opt/app"}
-	for _, installVarMounts := range []bool{false, true} {
-		t.Run(fmt.Sprintf("InstallVarMounts=%v", installVarMounts), func(t *testing.T) {
+	for _, tc := range []struct {
+		installVarMounts bool
+		installDeferVar  bool
+	}{
+		{false, false},
+		{false, true},
+		{true, false},
+		{true, true},
+	} {
+		t.Run(fmt.Sprintf("%+v", tc), func(t *testing.T) {
 			pipeline := makeFakeRawBootcPipeline()
 			pipeline.PartitionTable = testdisk.MakeFakePartitionTable("/", "/boot", "/boot/efi", "/var/opt", "/var/opt/app", "/tmp")
-			pipeline.InstallVarMounts = installVarMounts
+			pipeline.InstallVarMounts = tc.installVarMounts
+			pipeline.InstallDeferVar = tc.installDeferVar
 			pipeline.OSCustomizations.Users = []users.User{{Name: "alice"}}
 			pipeline.OSCustomizations.SELinux = "targeted"
 			serialized, err := pipeline.Serialize()
@@ -138,14 +147,17 @@ func TestRawBootcImageSerializeVarMounts(t *testing.T) {
 
 			// Only a bootc that initializes /var filesystems gets them mounted.
 			expectedInstallMounts := bootMounts
-			if installVarMounts {
+			if tc.installVarMounts {
 				expectedInstallMounts = append(slices.Clone(bootMounts), varMounts...)
 			}
 			stage := findStage("org.osbuild.bootc.install-to-filesystem", serialized.Stages)
 			require.NotNil(t, stage)
 			assert.Equal(t, expectedInstallMounts, mountTargets(stage.Mounts))
 			// ...and asked to initialize them
-			assert.Equal(t, installVarMounts, stage.Options.(*osbuild.BootcInstallToFilesystemOptions).InitializeVarMounts)
+			opts := stage.Options.(*osbuild.BootcInstallToFilesystemOptions)
+			assert.Equal(t, tc.installVarMounts, opts.InitializeVarMounts)
+			// ...and not to seed /var below them, if it can
+			assert.Equal(t, tc.installVarMounts && tc.installDeferVar, opts.DeferVar)
 
 			// Customizations always see /var filesystems on top of the deployment,
 			// rather than hidden below its stateroot /var.

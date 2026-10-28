@@ -29,6 +29,7 @@ type BootcDistro struct {
 	bootloader      *string
 	// set from the build container, which runs "bootc install"
 	installVarMounts bool
+	installDeferVar  bool
 
 	id            distro.ID
 	defaultFs     string
@@ -144,6 +145,7 @@ func NewBootcWithLoader(loader *Loader, name string, cinfo *bootc.Info) (*BootcD
 		bootloader:       cinfo.Bootloader,
 		unifiedKernel:    cinfo.UnifiedKernel,
 		installVarMounts: cinfo.InstallVarMounts,
+		installDeferVar:  cinfo.InstallDeferVar,
 		containerType:    cinfo.ContainerType,
 	}
 
@@ -304,6 +306,7 @@ func (d *BootcDistro) SetBuildContainer(cinfo *bootc.Info) error {
 	d.buildImgref = cinfo.Imgref
 	d.buildImageID = cinfo.ImageID
 	d.installVarMounts = cinfo.InstallVarMounts
+	d.installDeferVar = cinfo.InstallDeferVar
 	d.buildSourceInfo = cinfo.OSInfo
 
 	return nil
