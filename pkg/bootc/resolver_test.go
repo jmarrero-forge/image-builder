@@ -277,6 +277,69 @@ func TestHasAboot(t *testing.T) {
 	}
 }
 
+func TestFeatures(t *testing.T) {
+	for _, tc := range []struct {
+		Name     string
+		In       string
+		ExitCode int
+		Out      []string
+		ErrMsg   string
+	}{
+		{Name: "one", In: "bootc 1.17.0\nFeatures:\n - initialize-var-mounts", Out: []string{"initialize-var-mounts"}},
+		{Name: "several", In: "bootc 1.17.0\nFeatures:\n - defer-var\n - initialize-var-mounts\n", Out: []string{"defer-var", "initialize-var-mounts"}},
+		{Name: "no features", In: "bootc 1.16.10", Out: nil},
+		{Name: "empty feature list", In: "bootc 1.17.0\nFeatures:", Out: nil},
+		{Name: "not a feature line", In: "bootc 1.17.0 initialize-var-mounts", Out: nil},
+		{Name: "crlf", In: "bootc 1.17.0\r\nFeatures:\r\n - initialize-var-mounts\r", Out: []string{"initialize-var-mounts"}},
+		{Name: "other section", In: "bootc 1.17.0\nFeatures:\n - something-else\nOther:\n - initialize-var-mounts", Out: []string{"something-else"}},
+		{Name: "error", In: "", ExitCode: 1, ErrMsg: "failed to run bootc --version"},
+	} {
+		t.Run(tc.Name, func(t *testing.T) {
+			makeFakePodman(t, fmt.Sprintf(`#!/bin/sh
+				printf '%s\n'
+				exit %d
+				`, tc.In, tc.ExitCode))
+			cnt := bootc.Container{}
+			features, err := cnt.Features()
+			if tc.ErrMsg != "" {
+				assert.ErrorContains(t, err, tc.ErrMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tc.Out, features)
+		})
+	}
+}
+
+func TestResolveBuildInfoInstallFeatures(t *testing.T) {
+	for _, tc := range []struct {
+		Name             string
+		In               string
+		ExitCode         int
+		InstallVarMounts bool
+		InstallDeferVar  bool
+	}{
+		{Name: "both", In: "bootc 1.17.0\nFeatures:\n - defer-var\n - initialize-var-mounts", InstallVarMounts: true, InstallDeferVar: true},
+		{Name: "initialize only", In: "bootc 1.17.0\nFeatures:\n - initialize-var-mounts", InstallVarMounts: true},
+		{Name: "defer only", In: "bootc 1.17.0\nFeatures:\n - defer-var", InstallDeferVar: true},
+		{Name: "no features", In: "bootc 1.16.10"},
+		// failing to find out only means the /var filesystems aren't mounted
+		{Name: "error", ExitCode: 1},
+	} {
+		t.Run(tc.Name, func(t *testing.T) {
+			makeFakePodman(t, fmt.Sprintf(`#!/bin/sh
+				printf '%s\n'
+				exit %d
+				`, tc.In, tc.ExitCode))
+			cnt := bootc.Container{}
+			info, err := cnt.ResolveBuildInfo()
+			require.NoError(t, err)
+			assert.Equal(t, tc.InstallVarMounts, info.InstallVarMounts)
+			assert.Equal(t, tc.InstallDeferVar, info.InstallDeferVar)
+		})
+	}
+}
+
 func TestBootloaderHappy(t *testing.T) {
 	for _, tc := range []struct {
 		In  string
